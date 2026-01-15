@@ -1,2 +1,2 @@
 # mc_forks
-collection of forjed nodes for comfyiu
+collection of forked nodes for comfyiu
