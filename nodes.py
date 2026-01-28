@@ -159,12 +159,67 @@ class MCLTXVTiledVAEDecode(io.ComfyNode):
             output = output[:-time_scale_factor, :, :]
         
         return io.NodeOutput(output)
+        
+       
+class MCLTXVFilmGrain(io.ComfyNode):
+    """
+    Aggiunge film grain alle immagini con controllo intensità e saturazione.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="MCLTXVFilmGrain",
+            display_name="MC LTXV Film Grain",
+            category="MC nodi/Ltxv",
+            inputs=[
+                io.Image.Input("images"),
+                io.Float.Input("grain_intensity", default=0.1, min=0.0, max=1.0, step=0.01),
+                io.Float.Input("saturation", default=0.5, min=0.0, max=1.0, step=0.01),
+            ],
+            outputs=[
+                io.Image.Output(display_name="images")
+            ],
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        images: torch.Tensor,
+        grain_intensity: float,
+        saturation: float,
+    ) -> io.NodeOutput:
+        if grain_intensity < 0 or grain_intensity > 1:
+            raise ValueError("Grain intensity must be between 0 and 1.")
+        
+        device = images.device  # Usa device dell'immagine invece di get_torch_device()
+        images = images.to(device)
+        
+        # Grain tensor riutilizzabile (shape prima immagine)
+        grain = torch.zeros(images[0:1].shape, device=device)
+        
+        # Processa immagini batch
+        for i in range(images.shape[0]):
+            # Genera grain per singola immagine
+            torch.randn(grain.shape, device=device, out=grain)
+            grain[:, :, :, 0] *= 2   # R channel più grain
+            grain[:, :, :, 2] *= 3   # B channel più grain
+            
+            # Mix saturazione (usa green channel come base)
+            grain = grain * saturation + grain[:, :, :, 1].unsqueeze(3).expand(-1, -1, -1, 3) * (1 - saturation)
+            
+            # Blend grain con immagine (in-place per memoria)
+            images[i : i + 1].add_(grain_intensity * grain)
+            images[i : i + 1].clamp_(0, 1)
+        
+        return io.NodeOutput(images)
 
 class MC_TiledVAE_Extension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
             MCLTXVTiledVAEDecode,
+            MCLTXVFilmGrain
         ]
 
 async def comfy_entrypoint() -> MC_TiledVAE_Extension:
