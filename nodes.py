@@ -1,5 +1,6 @@
 from typing_extensions import override
 import torch
+import math
 from comfy_api.latest import ComfyExtension, io
 
 class MCLTXVTiledVAEDecode(io.ComfyNode):
@@ -213,13 +214,50 @@ class MCLTXVFilmGrain(io.ComfyNode):
             images[i : i + 1].clamp_(0, 1)
         
         return io.NodeOutput(images)
+        
+        
+class MCFloatToInt(io.ComfyNode):
+    """
+    Converte float in int con round, floor o ceil.
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="MCFloatToInt",
+            display_name="MC Float to Int",
+            category="MC nodi",
+            inputs=[
+                io.Float.Input("float_n", force_input=True),
+                io.Combo.Input("function", 
+                             default="round", 
+                             options=["round", "floor", "ceil"]),
+            ],
+            outputs=[
+                io.Int.Output(display_name="int")
+            ],
+        )
+
+    @classmethod
+    def execute(cls, float_n, function: str) -> io.NodeOutput:
+        result = round(float_n)
+        
+        if function == "floor":
+            result = math.floor(float_n)
+        elif function == "ceil":
+            result = math.ceil(float_n)
+        
+        return io.NodeOutput(int(result)) 
+        
+        
 
 class MC_TiledVAE_Extension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
             MCLTXVTiledVAEDecode,
-            MCLTXVFilmGrain
+            MCLTXVFilmGrain,
+            MCFloatToInt
         ]
 
 async def comfy_entrypoint() -> MC_TiledVAE_Extension:
